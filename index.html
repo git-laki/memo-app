@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>本日のタスク</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial;
+      background: #fff;
+      padding: 20px;
+      max-width: 500px;
+      margin: auto;
+    }
+
+    h1 {
+      font-size: 20px;
+      margin-bottom: 16px;
+    }
+
+    textarea {
+      width: 100%;
+      height: 150px;
+      font-size: 16px;
+      padding: 10px;
+      box-sizing: border-box;
+      margin-bottom: 10px;
+      line-height: 1.5;
+    }
+
+    button {
+      font-size: 14px;
+      padding: 6px 10px;
+      margin-top: 16px;
+      cursor: pointer;
+    }
+
+    .task {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 6px 0;
+      border-bottom: 1px solid #eee;
+      cursor: pointer;
+    }
+
+    .left {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .done {
+      text-decoration: line-through;
+      color: #888;
+    }
+
+    .play {
+      cursor: pointer;
+      font-size: 16px;
+      user-select: none;
+    }
+
+    .hidden {
+      display: none;
+    }
+
+    input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  appearance: none;
+  border: 1px solid #bbb;
+  position: relative;
+}
+
+input[type="checkbox"]:checked {
+  background: #333;
+  border-color: #333;
+}
+
+input[type="checkbox"]:checked::after {
+  content: "";
+  position: absolute;
+  top: 2px;
+  left: 5px;
+  width: 4px;
+  height: 8px;
+  border: solid #fff;
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+}
+
+  </style>
+</head>
+<body>
+
+<h1>本日のタスク</h1>
+
+<div id="viewMode">
+  <div id="taskList"></div>
+  <button id="editBtn">編集</button>
+</div>
+
+<div id="editMode" class="hidden">
+  <textarea id="taskInput"></textarea>
+  <br/>
+  <button id="saveBtn">保存</button>
+</div>
+
+<script>
+let tasks = JSON.parse(localStorage.getItem("tasks") || "[]");
+let runningTaskIndex = null;
+let startTime = null;
+
+const taskList = document.getElementById("taskList");
+const editBtn = document.getElementById("editBtn");
+const saveBtn = document.getElementById("saveBtn");
+const taskInput = document.getElementById("taskInput");
+const viewMode = document.getElementById("viewMode");
+const editMode = document.getElementById("editMode");
+
+function saveTasks() {
+  localStorage.setItem("tasks", JSON.stringify(tasks));
+}
+
+function formatTime(ms) {
+  const totalSec = Math.floor(ms / 1000);
+  const h = Math.floor(totalSec / 3600);
+  const m = Math.floor((totalSec % 3600) / 60);
+  return h > 0 ? `${h}h${m}m` : `${m}m`;
+}
+
+function render() {
+  taskList.innerHTML = "";
+
+  tasks.forEach((task, index) => {
+    const row = document.createElement("div");
+    row.className = "task";
+
+    const left = document.createElement("div");
+    left.className = "left";
+
+    const checkbox = document.createElement("input");
+    checkbox.type = "checkbox";
+    checkbox.checked = task.done;
+    checkbox.style.pointerEvents = "none";
+
+    const label = document.createElement("span");
+    label.textContent = task.text + (task.time ? `（${task.time}）` : "");
+    if (task.done) label.classList.add("done");
+
+    left.appendChild(checkbox);
+    left.appendChild(label);
+
+    const play = document.createElement("span");
+    play.className = "play";
+
+    if (!task.done) {
+      play.textContent = runningTaskIndex === index ? "実行中" : "▶︎";
+    }
+
+    // ★ タスク行クリックで操作
+    row.onclick = () => {
+      if (task.done) return;
+
+      if (runningTaskIndex === index) {
+        const elapsed = Date.now() - startTime;
+        task.time = formatTime(elapsed);
+        task.done = true;
+        runningTaskIndex = null;
+      } else {
+        runningTaskIndex = index;
+        startTime = Date.now();
+      }
+
+      saveTasks();
+      render();
+    };
+
+    row.appendChild(left);
+    row.appendChild(play);
+    taskList.appendChild(row);
+  });
+}
+
+editBtn.onclick = () => {
+  taskInput.value = tasks.map(t => t.text).join("\n");
+  viewMode.classList.add("hidden");
+  editMode.classList.remove("hidden");
+};
+
+saveBtn.onclick = () => {
+  const lines = taskInput.value.split("\n").filter(l => l.trim());
+  tasks = lines.map(t => ({ text: t, done: false, time: null }));
+  saveTasks();
+  render();
+  editMode.classList.add("hidden");
+  viewMode.classList.remove("hidden");
+};
+
+render();
+</script>
+
+</body>
+</html>
