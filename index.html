@@ -121,98 +121,206 @@ input[type="checkbox"]:checked::after {
 </div>
 
 <script>
-let tasks = JSON.parse(localStorage.getItem("tasks") || "[]");
-let runningTaskIndex = null;
-let startTime = null;
-
-const taskList = document.getElementById("taskList");
-const editBtn = document.getElementById("editBtn");
-const saveBtn = document.getElementById("saveBtn");
-const taskInput = document.getElementById("taskInput");
-const viewMode = document.getElementById("viewMode");
-const editMode = document.getElementById("editMode");
-
-function saveTasks() {
-  localStorage.setItem("tasks", JSON.stringify(tasks));
-}
-
-function formatTime(ms) {
-  const totalSec = Math.floor(ms / 1000);
-  const h = Math.floor(totalSec / 3600);
-  const m = Math.floor((totalSec % 3600) / 60);
-  return h > 0 ? `${h}h${m}m` : `${m}m`;
-}
-
-function render() {
-  taskList.innerHTML = "";
-
-  tasks.forEach((task, index) => {
-    const row = document.createElement("div");
-    row.className = "task";
-
-    const left = document.createElement("div");
-    left.className = "left";
-
-    const checkbox = document.createElement("input");
-    checkbox.type = "checkbox";
-    checkbox.checked = task.done;
-    checkbox.style.pointerEvents = "none";
-
-    const label = document.createElement("span");
-    label.textContent = task.text + (task.time ? `（${task.time}）` : "");
-    if (task.done) label.classList.add("done");
-
-    left.appendChild(checkbox);
-    left.appendChild(label);
-
-    const play = document.createElement("span");
-    play.className = "play";
-
-    if (!task.done) {
-      play.textContent = runningTaskIndex === index ? "実行中" : "▶︎";
+  /* ------------------------------
+    Storage Keys
+  ------------------------------ */
+  const STORAGE_KEYS = {
+    TASKS: "tasks",
+    RUNNING_INDEX: "runningTaskIndex",
+    START_TIME: "startTime",
+  };
+  
+  /* ------------------------------
+    State
+  ------------------------------ */
+  let tasks = JSON.parse(localStorage.getItem(STORAGE_KEYS.TASKS) || "[]");
+  
+  // 実行中タスクの状態（再起動で復帰させる）
+  let runningTaskIndex = null;
+  let startTime = null;
+  
+  /* ------------------------------
+    Elements
+  ------------------------------ */
+  const taskList = document.getElementById("taskList");
+  const editBtn = document.getElementById("editBtn");
+  const saveBtn = document.getElementById("saveBtn");
+  const taskInput = document.getElementById("taskInput");
+  const viewMode = document.getElementById("viewMode");
+  const editMode = document.getElementById("editMode");
+  
+  /* ------------------------------
+    Utils
+  ------------------------------ */
+  function saveTasks() {
+    localStorage.setItem(STORAGE_KEYS.TASKS, JSON.stringify(tasks));
+  }
+  
+  function saveTimerState() {
+    if (runningTaskIndex === null || startTime === null) {
+      localStorage.removeItem(STORAGE_KEYS.RUNNING_INDEX);
+      localStorage.removeItem(STORAGE_KEYS.START_TIME);
+      return;
     }
-
-    // ★ タスク行クリックで操作
-    row.onclick = () => {
-      if (task.done) return;
-
-      if (runningTaskIndex === index) {
-        const elapsed = Date.now() - startTime;
-        task.time = formatTime(elapsed);
-        task.done = true;
-        runningTaskIndex = null;
+    localStorage.setItem(STORAGE_KEYS.RUNNING_INDEX, String(runningTaskIndex));
+    localStorage.setItem(STORAGE_KEYS.START_TIME, String(startTime));
+  }
+  
+  function loadTimerState() {
+    const idx = localStorage.getItem(STORAGE_KEYS.RUNNING_INDEX);
+    const st = localStorage.getItem(STORAGE_KEYS.START_TIME);
+  
+    if (idx === null || st === null) {
+      runningTaskIndex = null;
+      startTime = null;
+      return;
+    }
+  
+    const idxNum = Number(idx);
+    const stNum = Number(st);
+  
+    // 値の妥当性チェック
+    if (!Number.isFinite(idxNum) || !Number.isFinite(stNum)) {
+      runningTaskIndex = null;
+      startTime = null;
+      saveTimerState();
+      return;
+    }
+  
+    // tasks数が変わって index が壊れてるケースを防ぐ
+    if (idxNum < 0 || idxNum >= tasks.length) {
+      runningTaskIndex = null;
+      startTime = null;
+      saveTimerState();
+      return;
+    }
+  
+    // 未来の時刻になってたらリセット（端末時刻変更対策の最低限）
+    if (stNum > Date.now()) {
+      runningTaskIndex = null;
+      startTime = null;
+      saveTimerState();
+      return;
+    }
+  
+    runningTaskIndex = idxNum;
+    startTime = stNum;
+  }
+  
+  function formatTime(ms) {
+    const totalSec = Math.floor(ms / 1000);
+    const h = Math.floor(totalSec / 3600);
+    const m = Math.floor((totalSec % 3600) / 60);
+    return h > 0 ? `${h}h${m}m` : `${m}m`;
+  }
+  
+  /* ------------------------------
+    Render
+  ------------------------------ */
+  function render() {
+    taskList.innerHTML = "";
+  
+    tasks.forEach((task, index) => {
+      const row = document.createElement("div");
+      row.className = "task";
+      row.style.cursor = task.done ? "default" : "pointer";
+  
+      const left = document.createElement("div");
+      left.className = "left";
+  
+      const checkbox = document.createElement("input");
+      checkbox.type = "checkbox";
+      checkbox.checked = !!task.done;
+      checkbox.style.pointerEvents = "none";
+  
+      const label = document.createElement("span");
+      label.textContent = task.text + (task.time ? `（${task.time}）` : "");
+      if (task.done) label.classList.add("done");
+  
+      left.appendChild(checkbox);
+      left.appendChild(label);
+  
+      const play = document.createElement("span");
+      play.className = "play";
+  
+      if (!task.done) {
+        play.textContent = runningTaskIndex === index ? "実行中" : "▶︎";
       } else {
+        play.textContent = "";
+      }
+  
+      // タスク行クリックで開始/完了
+      row.onclick = () => {
+        if (task.done) return;
+  
+        // 実行中 → 完了（停止）
+        if (runningTaskIndex === index) {
+          const elapsed = Date.now() - startTime;
+          task.time = formatTime(elapsed);
+          task.done = true;
+  
+          runningTaskIndex = null;
+          startTime = null;
+  
+          saveTimerState();
+          saveTasks();
+          render();
+          return;
+        }
+  
+        // 別タスクを開始 → 前のタイマーは「自動停止」だけ（完了扱いにはしない）
         runningTaskIndex = index;
         startTime = Date.now();
-      }
-
-      saveTasks();
-      render();
-    };
-
-    row.appendChild(left);
-    row.appendChild(play);
-    taskList.appendChild(row);
-  });
-}
-
-editBtn.onclick = () => {
-  taskInput.value = tasks.map(t => t.text).join("\n");
-  viewMode.classList.add("hidden");
-  editMode.classList.remove("hidden");
-};
-
-saveBtn.onclick = () => {
-  const lines = taskInput.value.split("\n").filter(l => l.trim());
-  tasks = lines.map(t => ({ text: t, done: false, time: null }));
-  saveTasks();
+  
+        saveTimerState();
+        render();
+      };
+  
+      row.appendChild(left);
+      row.appendChild(play);
+      taskList.appendChild(row);
+    });
+  }
+  
+  /* ------------------------------
+    Edit Mode
+  ------------------------------ */
+  editBtn.onclick = () => {
+    // テキストだけを編集（完了・時間は保持したいなら、ここは後で拡張）
+    taskInput.value = tasks.map((t) => t.text).join("\n");
+    viewMode.classList.add("hidden");
+    editMode.classList.remove("hidden");
+  };
+  
+  saveBtn.onclick = () => {
+    const lines = taskInput.value
+      .split("\n")
+      .map((l) => l.trim())
+      .filter(Boolean);
+  
+    // 既存タスクの done/time を保持したい場合は別ロジックになるが、
+    // 現状仕様に合わせて「テキスト一覧を再生成」する
+    tasks = lines.map((t) => ({ text: t, done: false, time: null }));
+  
+    // tasksを作り直すと runningTaskIndex がズレる可能性があるのでリセット
+    runningTaskIndex = null;
+    startTime = null;
+    saveTimerState();
+  
+    saveTasks();
+    render();
+  
+    editMode.classList.add("hidden");
+    viewMode.classList.remove("hidden");
+  };
+  
+  /* ------------------------------
+    Boot
+  ------------------------------ */
+  loadTimerState();
   render();
-  editMode.classList.add("hidden");
-  viewMode.classList.remove("hidden");
-};
-
-render();
-</script>
+  </script>
+  
 
 </body>
 </html>
