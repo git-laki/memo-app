@@ -275,6 +275,37 @@ input[type="checkbox"]:checked::after {
         saveTimerState();
         render();
       };
+
+      // 長押し削除（スマホ向け）
+let pressTimer = null;
+
+row.addEventListener("touchstart", () => {
+  if (pressTimer) clearTimeout(pressTimer);
+  pressTimer = setTimeout(() => {
+    const ok = confirm(`削除しますか？\n\n${task.text}`);
+    if (!ok) return;
+
+    // 削除するタスクが実行中ならタイマーも止める
+    if (runningTaskIndex === index) {
+      runningTaskIndex = null;
+      startTime = null;
+      saveTimerState();
+    }
+
+    tasks.splice(index, 1);
+    saveTasks();
+    render();
+  }, 600); // 0.6秒長押し
+});
+
+row.addEventListener("touchend", () => {
+  if (pressTimer) clearTimeout(pressTimer);
+});
+
+row.addEventListener("touchmove", () => {
+  if (pressTimer) clearTimeout(pressTimer);
+});
+
   
       row.appendChild(left);
       row.appendChild(play);
@@ -293,26 +324,52 @@ input[type="checkbox"]:checked::after {
   };
   
   saveBtn.onclick = () => {
-    const lines = taskInput.value
-      .split("\n")
-      .map((l) => l.trim())
-      .filter(Boolean);
-  
-    // 既存タスクの done/time を保持したい場合は別ロジックになるが、
-    // 現状仕様に合わせて「テキスト一覧を再生成」する
-    tasks = lines.map((t) => ({ text: t, done: false, time: null }));
-  
-    // tasksを作り直すと runningTaskIndex がズレる可能性があるのでリセット
-    runningTaskIndex = null;
-    startTime = null;
+  const lines = taskInput.value
+    .split("\n")
+    .map((l) => l.trim())
+    .filter(Boolean);
+
+  // 既存タスクを text で辞書化（done/time を保持するため）
+  const map = new Map(tasks.map((t, i) => [t.text, { ...t, _oldIndex: i }]));
+
+  const nextTasks = [];
+
+  for (const text of lines) {
+    if (map.has(text)) {
+      nextTasks.push(map.get(text)); // done/time そのまま
+    } else {
+      nextTasks.push({ text, done: false, time: null }); // 新規行は追加
+    }
+  }
+
+  // 実行中タスクが「編集によって消された」 or 「並び順でズレた」可能性があるので整合性を取る
+  if (runningTaskIndex !== null) {
+    const oldTask = tasks[runningTaskIndex];
+    const newIndex = nextTasks.findIndex((t) => t.text === oldTask?.text);
+
+    if (newIndex === -1) {
+      // 実行中のタスク自体が消された → タイマー停止
+      runningTaskIndex = null;
+      startTime = null;
+    } else {
+      // indexが変わった → 新しいindexへ付け替え
+      runningTaskIndex = newIndex;
+    }
     saveTimerState();
-  
-    saveTasks();
-    render();
-  
-    editMode.classList.add("hidden");
-    viewMode.classList.remove("hidden");
-  };
+  }
+
+  // _oldIndex は不要なので削除
+  nextTasks.forEach((t) => delete t._oldIndex);
+
+  tasks = nextTasks;
+
+  saveTasks();
+  render();
+
+  editMode.classList.add("hidden");
+  viewMode.classList.remove("hidden");
+};
+
   
   /* ------------------------------
     Boot
