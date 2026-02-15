@@ -214,104 +214,122 @@ input[type="checkbox"]:checked::after {
     return h > 0 ? `${h}h${m}m` : `${m}m`;
   }
   
-  /* ------------------------------
-    Render
-  ------------------------------ */
-  function render() {
-    taskList.innerHTML = "";
-  
-    tasks.forEach((task, index) => {
-      const row = document.createElement("div");
-      row.className = "task";
-      row.style.cursor = task.done ? "default" : "pointer";
-  
-      const left = document.createElement("div");
-      left.className = "left";
-  
-      const checkbox = document.createElement("input");
-      checkbox.type = "checkbox";
-      checkbox.checked = !!task.done;
-      checkbox.style.pointerEvents = "none";
-  
-      const label = document.createElement("span");
-      label.textContent = task.text + (task.time ? `（${task.time}）` : "");
-      if (task.done) label.classList.add("done");
-  
-      left.appendChild(checkbox);
-      left.appendChild(label);
-  
-      const play = document.createElement("span");
-      play.className = "play";
-  
-      if (!task.done) {
-        play.textContent = runningTaskIndex === index ? "実行中" : "▶︎";
-      } else {
-        play.textContent = "";
-      }
-  
-      // タスク行クリックで開始/完了
-      row.onclick = () => {
-        if (task.done) return;
-  
-        // 実行中 → 完了（停止）
-        if (runningTaskIndex === index) {
-          const elapsed = Date.now() - startTime;
-          task.time = formatTime(elapsed);
-          task.done = true;
-  
-          runningTaskIndex = null;
-          startTime = null;
-  
-          saveTimerState();
-          saveTasks();
-          render();
-          return;
-        }
-  
-        // 別タスクを開始 → 前のタイマーは「自動停止」だけ（完了扱いにはしない）
-        runningTaskIndex = index;
-        startTime = Date.now();
-  
-        saveTimerState();
-        render();
-      };
+ /* ------------------------------
+  Render
+------------------------------ */
+function render() {
+  taskList.innerHTML = "";
 
-      // 長押し削除（スマホ向け）
-let pressTimer = null;
+  // 表示順だけを作る（tasks自体は並び替えない）
+  const order = tasks
+    .map((task, index) => ({ task, index }))
+    .sort((a, b) => {
+      // ① 実行中を最上部
+      const aRunning = a.index === runningTaskIndex;
+      const bRunning = b.index === runningTaskIndex;
+      if (aRunning !== bRunning) return aRunning ? -1 : 1;
 
-row.addEventListener("touchstart", () => {
-  if (pressTimer) clearTimeout(pressTimer);
-  pressTimer = setTimeout(() => {
-    const ok = confirm(`削除しますか？\n\n${task.text}`);
-    if (!ok) return;
+      // ② 未完了を上、完了を下
+      const aDone = !!a.task.done;
+      const bDone = !!b.task.done;
+      if (aDone !== bDone) return aDone ? 1 : -1;
 
-    // 削除するタスクが実行中ならタイマーも止める
-    if (runningTaskIndex === index) {
-      runningTaskIndex = null;
-      startTime = null;
-      saveTimerState();
+      // ③ 同じグループ内は元の順（安定）
+      return a.index - b.index;
+    });
+
+  order.forEach(({ task, index }) => {
+    const row = document.createElement("div");
+    row.className = "task";
+    row.style.cursor = task.done ? "default" : "pointer";
+
+    const left = document.createElement("div");
+    left.className = "left";
+
+    const checkbox = document.createElement("input");
+    checkbox.type = "checkbox";
+    checkbox.checked = !!task.done;
+    checkbox.style.pointerEvents = "none";
+
+    const label = document.createElement("span");
+    label.textContent = task.text + (task.time ? `（${task.time}）` : "");
+    if (task.done) label.classList.add("done");
+
+    left.appendChild(checkbox);
+    left.appendChild(label);
+
+    const play = document.createElement("span");
+    play.className = "play";
+
+    if (!task.done) {
+      play.textContent = runningTaskIndex === index ? "実行中" : "▶︎";
+    } else {
+      play.textContent = "";
     }
 
-    tasks.splice(index, 1);
-    saveTasks();
-    render();
-  }, 600); // 0.6秒長押し
-});
+    // タスク行クリックで開始/完了
+    row.onclick = () => {
+      if (task.done) return;
 
-row.addEventListener("touchend", () => {
-  if (pressTimer) clearTimeout(pressTimer);
-});
+      // 実行中 → 完了（停止）
+      if (runningTaskIndex === index) {
+        const elapsed = Date.now() - startTime;
+        task.time = formatTime(elapsed);
+        task.done = true;
 
-row.addEventListener("touchmove", () => {
-  if (pressTimer) clearTimeout(pressTimer);
-});
+        runningTaskIndex = null;
+        startTime = null;
 
-  
-      row.appendChild(left);
-      row.appendChild(play);
-      taskList.appendChild(row);
+        saveTimerState();
+        saveTasks();
+        render();
+        return;
+      }
+
+      // 別タスクを開始 → 前のタイマーは「自動停止」だけ（完了扱いにはしない）
+      runningTaskIndex = index;
+      startTime = Date.now();
+
+      saveTimerState();
+      render();
+    };
+
+    // 長押し削除（スマホ向け）
+    let pressTimer = null;
+
+    row.addEventListener("touchstart", () => {
+      if (pressTimer) clearTimeout(pressTimer);
+      pressTimer = setTimeout(() => {
+        const ok = confirm(`削除しますか？\n\n${task.text}`);
+        if (!ok) return;
+
+        // 削除するタスクが実行中ならタイマーも止める
+        if (runningTaskIndex === index) {
+          runningTaskIndex = null;
+          startTime = null;
+          saveTimerState();
+        }
+
+        tasks.splice(index, 1);
+        saveTasks();
+        render();
+      }, 600); // 0.6秒長押し
     });
-  }
+
+    row.addEventListener("touchend", () => {
+      if (pressTimer) clearTimeout(pressTimer);
+    });
+
+    row.addEventListener("touchmove", () => {
+      if (pressTimer) clearTimeout(pressTimer);
+    });
+
+    row.appendChild(left);
+    row.appendChild(play);
+    taskList.appendChild(row);
+  });
+}
+
   
   /* ------------------------------
     Edit Mode
