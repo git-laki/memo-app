@@ -138,8 +138,6 @@ input[type="checkbox"]:checked::after {
     State
   ------------------------------ */
   let tasks = JSON.parse(localStorage.getItem(STORAGE_KEYS.TASKS) || "[]");
-  
-  // 実行中タスクの状態（再起動で復帰させる）
   let runningTaskIndex = null;
   let startTime = null;
   
@@ -174,41 +172,10 @@ input[type="checkbox"]:checked::after {
     const idx = localStorage.getItem(STORAGE_KEYS.RUNNING_INDEX);
     const st = localStorage.getItem(STORAGE_KEYS.START_TIME);
   
-    if (idx === null || st === null) {
-      runningTaskIndex = null;
-      startTime = null;
-      return;
-    }
+    if (idx === null || st === null) return;
   
-    const idxNum = Number(idx);
-    const stNum = Number(st);
-  
-    // 値の妥当性チェック
-    if (!Number.isFinite(idxNum) || !Number.isFinite(stNum)) {
-      runningTaskIndex = null;
-      startTime = null;
-      saveTimerState();
-      return;
-    }
-  
-    // tasks数が変わって index が壊れてるケースを防ぐ
-    if (idxNum < 0 || idxNum >= tasks.length) {
-      runningTaskIndex = null;
-      startTime = null;
-      saveTimerState();
-      return;
-    }
-  
-    // 未来の時刻になってたらリセット（端末時刻変更対策の最低限）
-    if (stNum > Date.now()) {
-      runningTaskIndex = null;
-      startTime = null;
-      saveTimerState();
-      return;
-    }
-  
-    runningTaskIndex = idxNum;
-    startTime = stNum;
+    runningTaskIndex = Number(idx);
+    startTime = Number(st);
   }
   
   function formatTime(ms) {
@@ -218,180 +185,155 @@ input[type="checkbox"]:checked::after {
     return h > 0 ? `${h}h${m}m` : `${m}m`;
   }
   
- /* ------------------------------
-  Render
------------------------------- */
-function render() {
-  taskList.innerHTML = "";
-
-  // 表示順だけを作る（tasks自体は並び替えない）
-  const order = tasks
-    .map((task, index) => ({ task, index }))
-    .sort((a, b) => {
-      // ① 実行中を最上部
-      const aRunning = a.index === runningTaskIndex;
-      const bRunning = b.index === runningTaskIndex;
-      if (aRunning !== bRunning) return aRunning ? -1 : 1;
-
-      // ② 未完了を上、完了を下
-      const aDone = !!a.task.done;
-      const bDone = !!b.task.done;
-      if (aDone !== bDone) return aDone ? 1 : -1;
-
-      // ③ 同じグループ内は元の順（安定）
-      return a.index - b.index;
-    });
-
-  order.forEach(({ task, index }) => {
-    const row = document.createElement("div");
-    row.className = "task";
-    row.style.cursor = task.done ? "default" : "pointer";
-
-    const left = document.createElement("div");
-    left.className = "left";
-
-    const checkbox = document.createElement("input");
-    checkbox.type = "checkbox";
-    checkbox.checked = !!task.done;
-    checkbox.style.pointerEvents = "none";
-
-    const label = document.createElement("span");
-    label.textContent = task.text + (task.time ? `（${task.time}）` : "");
-    if (task.done) label.classList.add("done");
-
-    left.appendChild(checkbox);
-    left.appendChild(label);
-
-    const play = document.createElement("span");
-    play.className = "play";
-
-    if (!task.done) {
+  /* ------------------------------
+    Render
+  ------------------------------ */
+  function render() {
+    taskList.innerHTML = "";
+  
+    const order = tasks
+      .map((task, index) => ({ task, index }))
+      .sort((a, b) => {
+        const aRunning = a.index === runningTaskIndex;
+        const bRunning = b.index === runningTaskIndex;
+        if (aRunning !== bRunning) return aRunning ? -1 : 1;
+  
+        const aDone = !!a.task.done;
+        const bDone = !!b.task.done;
+        if (aDone !== bDone) return aDone ? 1 : -1;
+  
+        return a.index - b.index;
+      });
+  
+    order.forEach(({ task, index }) => {
+      const row = document.createElement("div");
+      row.className = "task";
+  
+      const left = document.createElement("div");
+      left.className = "left";
+  
+      const checkbox = document.createElement("input");
+      checkbox.type = "checkbox";
+      checkbox.checked = !!task.done;
+      checkbox.style.pointerEvents = "none";
+  
+      const label = document.createElement("span");
+      label.textContent = task.text + (task.time ? `（${task.time}）` : "");
+      if (task.done) label.classList.add("done");
+  
+      left.appendChild(checkbox);
+      left.appendChild(label);
+  
+      const play = document.createElement("span");
+      play.className = "play";
       play.textContent = runningTaskIndex === index ? "実行中" : "▶︎";
-    } else {
-      play.textContent = "";
-    }
-
-    // タスク行クリックで開始/完了
-    row.onclick = () => {
-      if (task.done) return;
-
-      // 実行中 → 完了（停止）
-      if (runningTaskIndex === index) {
-        const elapsed = Date.now() - startTime;
-        task.time = formatTime(elapsed);
-        task.done = true;
-
-        runningTaskIndex = null;
-        startTime = null;
-
-        saveTimerState();
-        saveTasks();
-        render();
-        return;
-      }
-
-      // 別タスクを開始 → 前のタイマーは「自動停止」だけ（完了扱いにはしない）
-      runningTaskIndex = index;
-      startTime = Date.now();
-
-      saveTimerState();
-      render();
-    };
-
-    // 長押し削除（スマホ向け）
-    let pressTimer = null;
-
-    row.addEventListener("touchstart", () => {
-      if (pressTimer) clearTimeout(pressTimer);
-      pressTimer = setTimeout(() => {
-        const ok = confirm(`削除しますか？\n\n${task.text}`);
-        if (!ok) return;
-
-        // 削除するタスクが実行中ならタイマーも止める
+  
+      row.onclick = () => {
+        if (task.done) return;
+  
         if (runningTaskIndex === index) {
+          const elapsed = Date.now() - startTime;
+          task.time = formatTime(elapsed);
+          task.done = true;
+  
           runningTaskIndex = null;
           startTime = null;
+  
           saveTimerState();
+          saveTasks();
+          render();
+          return;
         }
-
-        tasks.splice(index, 1);
-        saveTasks();
+  
+        runningTaskIndex = index;
+        startTime = Date.now();
+        saveTimerState();
         render();
-      }, 600); // 0.6秒長押し
+      };
+  
+      // 長押し削除
+      let pressTimer = null;
+  
+      row.addEventListener("touchstart", () => {
+        pressTimer = setTimeout(() => {
+          if (!confirm(`削除しますか？\n\n${task.text}`)) return;
+  
+          tasks.splice(index, 1);
+          saveTasks();
+          render();
+        }, 600);
+      });
+  
+      row.addEventListener("touchend", () => clearTimeout(pressTimer));
+      row.addEventListener("touchmove", () => clearTimeout(pressTimer));
+  
+      row.appendChild(left);
+      row.appendChild(play);
+      taskList.appendChild(row);
     });
-
-    row.addEventListener("touchend", () => {
-      if (pressTimer) clearTimeout(pressTimer);
-    });
-
-    row.addEventListener("touchmove", () => {
-      if (pressTimer) clearTimeout(pressTimer);
-    });
-
-    row.appendChild(left);
-    row.appendChild(play);
-    taskList.appendChild(row);
-  });
-}
-
+  }
   
   /* ------------------------------
     Edit Mode
   ------------------------------ */
   editBtn.onclick = () => {
-    // テキストだけを編集（完了・時間は保持したいなら、ここは後で拡張）
-    taskInput.value = tasks.map((t) => t.text).join("\n");
+    taskInput.value = tasks.map((t) => "・" + t.text).join("\n");
     viewMode.classList.add("hidden");
     editMode.classList.remove("hidden");
   };
   
+  /* Enterで・を追加 */
+  let isComposing = false;
+
+taskInput.addEventListener("compositionstart", () => {
+  isComposing = true;
+});
+
+taskInput.addEventListener("compositionend", () => {
+  isComposing = false;
+  fixBullets();
+});
+
+taskInput.addEventListener("input", () => {
+  if (isComposing) return;
+  fixBullets();
+});
+
+function fixBullets() {
+  const lines = taskInput.value.split("\n");
+
+  const fixed = lines.map((line, i) => {
+    if (line === "") return line;
+    return line.startsWith("・") ? line : "・" + line;
+  });
+
+  taskInput.value = fixed.join("\n");
+}
+
+
+  
   saveBtn.onclick = () => {
-  const lines = taskInput.value
-    .split("\n")
-    .map((l) => l.trim())
-    .filter(Boolean);
-
-  // 既存タスクを text で辞書化（done/time を保持するため）
-  const map = new Map(tasks.map((t, i) => [t.text, { ...t, _oldIndex: i }]));
-
-  const nextTasks = [];
-
-  for (const text of lines) {
-    if (map.has(text)) {
-      nextTasks.push(map.get(text)); // done/time そのまま
-    } else {
-      nextTasks.push({ text, done: false, time: null }); // 新規行は追加
+    const lines = taskInput.value
+      .split("\n")
+      .map((l) => l.replace(/^・/, "").trim())
+      .filter(Boolean);
+  
+    const map = new Map(tasks.map((t) => [t.text, t]));
+    const nextTasks = [];
+  
+    for (const text of lines) {
+      if (map.has(text)) nextTasks.push(map.get(text));
+      else nextTasks.push({ text, done: false, time: null });
     }
-  }
-
-  // 実行中タスクが「編集によって消された」 or 「並び順でズレた」可能性があるので整合性を取る
-  if (runningTaskIndex !== null) {
-    const oldTask = tasks[runningTaskIndex];
-    const newIndex = nextTasks.findIndex((t) => t.text === oldTask?.text);
-
-    if (newIndex === -1) {
-      // 実行中のタスク自体が消された → タイマー停止
-      runningTaskIndex = null;
-      startTime = null;
-    } else {
-      // indexが変わった → 新しいindexへ付け替え
-      runningTaskIndex = newIndex;
-    }
-    saveTimerState();
-  }
-
-  // _oldIndex は不要なので削除
-  nextTasks.forEach((t) => delete t._oldIndex);
-
-  tasks = nextTasks;
-
-  saveTasks();
-  render();
-
-  editMode.classList.add("hidden");
-  viewMode.classList.remove("hidden");
-};
-
+  
+    tasks = nextTasks;
+  
+    saveTasks();
+    render();
+  
+    editMode.classList.add("hidden");
+    viewMode.classList.remove("hidden");
+  };
   
   /* ------------------------------
     Boot
@@ -399,6 +341,7 @@ function render() {
   loadTimerState();
   render();
   </script>
+  
   
 
 </body>
