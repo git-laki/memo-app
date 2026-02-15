@@ -300,15 +300,26 @@ taskInput.addEventListener("input", () => {
 });
 
 function fixBullets() {
+  const start = taskInput.selectionStart;
+  const end = taskInput.selectionEnd;
+
+  const beforeLength = taskInput.value.length;
+
   const lines = taskInput.value.split("\n");
 
-  const fixed = lines.map((line, i) => {
+  const fixed = lines.map((line) => {
     if (line === "") return line;
     return line.startsWith("・") ? line : "・" + line;
   });
 
   taskInput.value = fixed.join("\n");
+
+  const afterLength = taskInput.value.length;
+  const diff = afterLength - beforeLength;
+
+  taskInput.setSelectionRange(start + diff, end + diff);
 }
+
 
 
   
