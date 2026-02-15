@@ -50,6 +50,7 @@
       padding: 6px 0;
       border-bottom: 1px solid #eee;
       cursor: pointer;
+      gap: 10px;
     }
 
     .left {
@@ -60,6 +61,7 @@
 
     .left span {
       font-size: 18px;
+      text-align: left;
     }
 
     .done {
@@ -71,6 +73,7 @@
       cursor: pointer;
       font-size: 18px;
       user-select: none;
+      flex-shrink: 0;
     }
 
     .hidden {
@@ -84,6 +87,7 @@
   appearance: none;
   border: 1px solid #bbb;
   position: relative;
+  flex-shrink: 0;
 }
 
 input[type="checkbox"]:checked {
