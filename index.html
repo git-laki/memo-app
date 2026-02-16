@@ -23,7 +23,7 @@
 
     textarea {
       width: 100%;
-      height: 150px;
+      height: 200px;
       font-size: 18px;
       padding: 10px;
       box-sizing: border-box;
@@ -36,10 +36,17 @@
       text-align: center;
     }
 
+    .button-wrap {
+      margin-top: 16px;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      gap: 10px;
+    }
+
     button {
       font-size: 16px;
       padding: 8px 16px;
-      margin-top: 16px;
       cursor: pointer;
     }
 
@@ -80,6 +87,10 @@
       display: none;
     }
 
+    .reportarea {
+      margin-top: 20px;
+    }
+
     input[type="checkbox"] {
   width: 20px;
   height: 20px;
@@ -115,13 +126,24 @@ input[type="checkbox"]:checked::after {
 
 <div id="viewMode">
   <div id="taskList"></div>
-  <button id="editBtn">編集</button>
+  <div class="button-wrap">
+    <button id="editBtn">編集</button>
+    <button id="clearDoneBtn">クリア</button>
+  </div>
+</div>
+<div class="button-wrap">
+  <button id="reportBtn">日報</button>
 </div>
 
 <div id="editMode" class="hidden">
   <textarea id="taskInput"></textarea>
   <br/>
   <button id="saveBtn">保存</button>
+</div>
+
+<div class="reportarea" id="reportArea" style="display:none;">
+  <textarea id="reportText" rows="8"></textarea>
+  <button id="copyReportBtn">コピー</button>
 </div>
 
 <script>
@@ -345,6 +367,81 @@ function fixBullets() {
     editMode.classList.add("hidden");
     viewMode.classList.remove("hidden");
   };
+
+  document.getElementById("clearDoneBtn").onclick = () => {
+  if (!confirm("完了タスクを削除しますか？")) return;
+
+  tasks = tasks.filter(t => !t.done);
+
+  saveTasks();
+  render();
+};
+
+  /* ------------------------------
+    日報
+  ------------------------------ */
+
+  const reportBtn = document.getElementById("reportBtn");
+const reportArea = document.getElementById("reportArea");
+const reportText = document.getElementById("reportText");
+const copyReportBtn = document.getElementById("copyReportBtn");
+
+function buildDailyReport() {
+  const doneTasks = tasks.filter(t => t.done);
+
+  const date = new Date();
+  const dateStr =
+    date.getFullYear() + "/" +
+    (date.getMonth() + 1) + "/" +
+    date.getDate();
+
+  let text = `【日報 ${dateStr}】\n\n`;
+  text += "■ 完了タスク\n";
+
+  doneTasks.forEach(t => {
+    text += `・${t.text}${t.time ? "（" + t.time + "）" : ""}\n`;
+  });
+
+  text += "\n■ 振り返り\n";
+
+  return text;
+}
+
+reportBtn.onclick = () => {
+  reportArea.style.display =
+    reportArea.style.display === "none" ? "block" : "none";
+
+  reportText.value = buildDailyReport();
+};
+
+copyReportBtn.onclick = () => {
+  reportText.select();
+  document.execCommand("copy");
+  alert("日報をコピーしました");
+};
+
+/* ------------------------------
+  Edit Mode連動
+------------------------------ */
+
+// 編集モードに入ると日報ボタンを隠す
+const originalEditHandler = editBtn.onclick;
+editBtn.onclick = () => {
+  originalEditHandler();
+  reportBtn.style.display = "none";
+  reportArea.style.display = "none";
+};
+
+// 保存して戻ると日報ボタンを戻す
+const originalSaveHandler = saveBtn.onclick;
+saveBtn.onclick = () => {
+  originalSaveHandler();
+  reportBtn.style.display = "inline-block";
+};
+
+
+
+
   
   /* ------------------------------
     Boot
