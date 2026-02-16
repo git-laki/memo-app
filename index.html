@@ -91,6 +91,12 @@
       margin-top: 20px;
     }
 
+    .report-actions {
+  display: flex;
+justify-content: space-between;
+align-items: center;
+}
+
     input[type="checkbox"] {
   width: 20px;
   height: 20px;
@@ -132,7 +138,7 @@ input[type="checkbox"]:checked::after {
   </div>
 </div>
 <div class="button-wrap">
-  <button id="reportBtn">日報</button>
+  <button id="reportBtn">日報を書く</button>
 </div>
 
 <div id="editMode" class="hidden">
@@ -143,7 +149,10 @@ input[type="checkbox"]:checked::after {
 
 <div class="reportarea" id="reportArea" style="display:none;">
   <textarea id="reportText" rows="8"></textarea>
-  <button id="copyReportBtn">コピー</button>
+  <div class="report-actions">
+    <button id="copyReportBtn">コピー</button>
+    <button id="openReportGPTBtn">日報GPTs</button>
+  </div>
 </div>
 
 <script>
@@ -439,8 +448,18 @@ saveBtn.onclick = () => {
   reportBtn.style.display = "inline-block";
 };
 
+/* ------------------------------
+GPTsのリンクへ遷移させる
+------------------------------ */
 
+const openReportGPTBtn = document.getElementById("openReportGPTBtn");
 
+openReportGPTBtn.onclick = () => {
+  window.open(
+    "https://chatgpt.com/g/g-674d9305744081918c5f582e49cbcce8-ri-bao-zuo-cheng-gpts/c/68b99617-84d4-8325-b270-9fd74b3aefda",
+    "_blank"
+  );
+};
 
   
   /* ------------------------------
