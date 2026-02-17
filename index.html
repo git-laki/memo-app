@@ -216,93 +216,113 @@ input[type="checkbox"]:checked::after {
     return h > 0 ? `${h}h${m}m` : `${m}m`;
   }
   
-  /* ------------------------------
-    Render
-  ------------------------------ */
-  function render() {
-    taskList.innerHTML = "";
-  
-    const order = tasks
-      .map((task, index) => ({ task, index }))
-      .sort((a, b) => {
-        const aRunning = a.index === runningTaskIndex;
-        const bRunning = b.index === runningTaskIndex;
-        if (aRunning !== bRunning) return aRunning ? -1 : 1;
-  
-        const aDone = !!a.task.done;
-        const bDone = !!b.task.done;
-        if (aDone !== bDone) return aDone ? 1 : -1;
-  
-        return a.index - b.index;
-      });
-  
-    order.forEach(({ task, index }) => {
-      const row = document.createElement("div");
-      row.className = "task";
-  
-      const left = document.createElement("div");
-      left.className = "left";
-  
-      const checkbox = document.createElement("input");
-      checkbox.type = "checkbox";
-      checkbox.checked = !!task.done;
-      checkbox.style.pointerEvents = "none";
-  
-      const label = document.createElement("span");
-      label.textContent = task.text + (task.time ? `（${task.time}）` : "");
-      if (task.done) label.classList.add("done");
-  
-      left.appendChild(checkbox);
-      left.appendChild(label);
-  
-      const play = document.createElement("span");
-      play.className = "play";
-      play.textContent = runningTaskIndex === index ? "実行中" : "▶︎";
-  
-      row.onclick = () => {
-        if (task.done) return;
-  
-        if (runningTaskIndex === index) {
-          const elapsed = Date.now() - startTime;
-          task.time = formatTime(elapsed);
-          task.done = true;
-  
-          runningTaskIndex = null;
-          startTime = null;
-  
-          saveTimerState();
-          saveTasks();
-          render();
-          return;
-        }
-  
-        runningTaskIndex = index;
-        startTime = Date.now();
-        saveTimerState();
+/* ------------------------------
+  Render
+------------------------------ */
+function render() {
+  taskList.innerHTML = "";
+
+  const order = tasks
+    .map((task, index) => ({ task, index }))
+    .sort((a, b) => {
+      const aRunning = a.index === runningTaskIndex;
+      const bRunning = b.index === runningTaskIndex;
+      if (aRunning !== bRunning) return aRunning ? -1 : 1;
+
+      const aDone = !!a.task.done;
+      const bDone = !!b.task.done;
+      if (aDone !== bDone) return aDone ? 1 : -1;
+
+      return a.index - b.index;
+    });
+
+  order.forEach(({ task, index }) => {
+    const row = document.createElement("div");
+    row.className = "task";
+
+    const left = document.createElement("div");
+    left.className = "left";
+
+    const checkbox = document.createElement("input");
+    checkbox.type = "checkbox";
+    checkbox.checked = !!task.done;
+    checkbox.style.pointerEvents = "none";
+
+    const label = document.createElement("span");
+    label.textContent = task.text + (task.time ? `（${task.time}）` : "");
+
+    if (task.done) {
+      label.classList.add("done");
+
+      // ★ 完了タスクの時間をタップで編集
+      label.onclick = (e) => {
+        e.stopPropagation();
+
+        const input = prompt(
+          "作業時間を入力してください（例: 1h20m / 90m）",
+          task.time || ""
+        );
+
+        if (!input) return;
+
+        task.time = input;
+        saveTasks();
         render();
       };
-  
-      // 長押し削除
-      let pressTimer = null;
-  
-      row.addEventListener("touchstart", () => {
-        pressTimer = setTimeout(() => {
-          if (!confirm(`削除しますか？\n\n${task.text}`)) return;
-  
-          tasks.splice(index, 1);
-          saveTasks();
-          render();
-        }, 600);
-      });
-  
-      row.addEventListener("touchend", () => clearTimeout(pressTimer));
-      row.addEventListener("touchmove", () => clearTimeout(pressTimer));
-  
-      row.appendChild(left);
-      row.appendChild(play);
-      taskList.appendChild(row);
+    }
+
+    left.appendChild(checkbox);
+    left.appendChild(label);
+
+    const play = document.createElement("span");
+    play.className = "play";
+    play.textContent = runningTaskIndex === index ? "実行中" : "▶︎";
+
+    row.onclick = () => {
+      if (task.done) return;
+
+      if (runningTaskIndex === index) {
+        const elapsed = Date.now() - startTime;
+        task.time = formatTime(elapsed);
+        task.done = true;
+
+        runningTaskIndex = null;
+        startTime = null;
+
+        saveTimerState();
+        saveTasks();
+        render();
+        return;
+      }
+
+      runningTaskIndex = index;
+      startTime = Date.now();
+      saveTimerState();
+      render();
+    };
+
+    // 長押し削除
+    let pressTimer = null;
+
+    row.addEventListener("touchstart", () => {
+      pressTimer = setTimeout(() => {
+        if (!confirm(`削除しますか？\n\n${task.text}`)) return;
+
+        tasks.splice(index, 1);
+        saveTasks();
+        render();
+      }, 600);
     });
-  }
+
+    row.addEventListener("touchend", () => clearTimeout(pressTimer));
+    row.addEventListener("touchmove", () => clearTimeout(pressTimer));
+
+    row.appendChild(left);
+    row.appendChild(play);
+    taskList.appendChild(row);
+  });
+}
+
   
   /* ------------------------------
     Edit Mode
