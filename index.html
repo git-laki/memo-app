@@ -407,14 +407,35 @@ function buildDailyReport() {
   let text = `【日報 ${dateStr}】\n\n`;
   text += "■ 完了タスク\n";
 
+  let totalMinutes = 0;
+
   doneTasks.forEach(t => {
     text += `・${t.text}${t.time ? "（" + t.time + "）" : ""}\n`;
+
+    if (t.time) {
+      const hMatch = t.time.match(/(\d+)h/);
+      const mMatch = t.time.match(/(\d+)m/);
+
+      const h = hMatch ? Number(hMatch[1]) : 0;
+      const m = mMatch ? Number(mMatch[1]) : 0;
+
+      totalMinutes += h * 60 + m;
+    }
   });
+
+  if (totalMinutes > 0) {
+    const h = Math.floor(totalMinutes / 60);
+    const m = totalMinutes % 60;
+
+    text += "\n■ 合計作業時間\n";
+    text += `${h > 0 ? `${h}h` : ""}${m}m\n`;
+  }
 
   text += "\n■ 振り返り\n";
 
   return text;
 }
+
 
 reportBtn.onclick = () => {
   reportArea.style.display =
